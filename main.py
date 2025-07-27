@@ -5,7 +5,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC  # <-- so
+from selenium.webdriver.support import expected_conditions as EC
 
 
 
@@ -79,41 +79,31 @@ def fetch_bmw_selenium():
 
         # Consent-Banner akzeptieren, falls vorhanden
         try:
-            time.sleep(3)  # gib der Seite etwas Zeit zum Laden
-
-            # Finde den Shadow Host
+            time.sleep(3)
             shadow_host = driver.find_element(By.CSS_SELECTOR, "epaas-consent-drawer-shell")
-
-            # Hole den Shadow Root
             shadow_root = driver.execute_script("return arguments[0].shadowRoot", shadow_host)
-
-            # Finde den Button im Shadow Root
             consent_button = shadow_root.find_element(By.CSS_SELECTOR,
                                                       "body > div > div > section > div.actions > div > div.buttons > button.accept-button.button-primary"
                                                       )
-
-            # Klicke den Button
             consent_button.click()
             print("✅ Consent-Banner im Shadow DOM akzeptiert.")
             time.sleep(2)
-
         except Exception as e:
             print("⚠️ Kein Consent-Banner gefunden oder Fehler beim Klick:", e)
 
-        # Öffne zuerst das Location-Dropdown
+        # Location: Munich
         dropdown_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//div[@title='Location filter']"))
         )
         dropdown_button.click()
 
-        # Warte bis das Munich-Checkbox-Element sichtbar ist und wähle es aus
         munich_checkbox = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.ID, "location_DE/Munich"))
         )
-        driver.execute_script("arguments[0].scrollIntoView(true);",
-                              munich_checkbox)  # Falls es außerhalb des Sichtbereichs ist
+        driver.execute_script("arguments[0].scrollIntoView(true);", munich_checkbox)
         munich_checkbox.click()
 
+        # Publication Date: Last 7 days
         dropdown_button_posting_date = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//div[@title='Publication filter']"))
         )
@@ -122,59 +112,50 @@ def fetch_bmw_selenium():
         last_7_days_checkbox = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.ID, "postingDate_7"))
         )
-        driver.execute_script("arguments[0].scrollIntoView(true);",
-                              last_7_days_checkbox)  # Falls es außerhalb des Sichtbereichs ist
+        driver.execute_script("arguments[0].scrollIntoView(true);", last_7_days_checkbox)
         last_7_days_checkbox.click()
 
-        # Warte auf das Eingabefeld
+        # Search for Werkstudent
         search_input = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "input.grp-text-search"))
         )
-
-        # Text eingeben
         search_input.clear()
         search_input.send_keys("Werkstudent")
 
-        # Klicke auf das Lupen-Symbol zum Auslösen der Suche
         search_button = WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button.grp-text-search-icon"))
         )
         search_button.click()
 
+        # Iterate through pages
         while True:
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.CLASS_NAME, "grp-jobfinder__cell-title"))
+            )
+
             job_elements = driver.find_elements(By.CLASS_NAME, "grp-jobfinder__cell-title")
             links = driver.find_elements(By.CLASS_NAME, "grp-popup-link-js.grp-jobfinder__link-jobdescription")
 
             for i in range(len(job_elements)):
                 title = job_elements[i].text
-                aria_label = links[i].get_attribute("aria-label")
                 href = links[i].get_attribute("href")
-                location_element = links[i].find_element(By.CLASS_NAME, "grp-jobfinder-cell-location")
-                location = location_element.text if location_element else "Unknown"
+                jobs.append(("BMW", title, href))
 
-                jobs.append({
-                    "title": title,
-                    "aria_label": aria_label,
-                    "url": href,
-                    "location": location
-                })
-                print(f"Job: {title} | Location: {location} | URL: {href}")
-
-            next_button = driver.find_element(By.CSS_SELECTOR, "button.grp-jobfinder__pagination-button.next")
-            classes = next_button.get_attribute("class")
-
-            if "disabled" in classes:
-                print("Letzte Seite erreicht.")
+            # Nächste Seite prüfen
+            try:
+                next_button = driver.find_element(By.CSS_SELECTOR, "button.grp-jobfinder__pagination-button.next")
+                if "disabled" in next_button.get_attribute("class"):
+                    break
+                next_button.click()
+                time.sleep(4)
+            except:
                 break
-
-            next_button.click()
-            time.sleep(4)
 
         driver.quit()
     except Exception as e:
         print(f"BMW Selenium scraping failed: {e}")
-
     return jobs
+
 
 
 if __name__ == "__main__":
